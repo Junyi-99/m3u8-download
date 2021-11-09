@@ -2,10 +2,14 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"os"
-
 	"github.com/urfave/cli/v2"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
+	"log"
+	"m3u8-download/pool"
+	"math/rand"
+	"os"
+	"time"
 )
 
 func main() {
@@ -14,7 +18,7 @@ func main() {
 			&cli.StringFlag{
 				Name:     "uri",
 				Aliases:  []string{"u"},
-				Usage:    "The uri of m3u8 file",
+				Usage:    "The URL to the playlist.",
 				Required: true,
 			},
 			&cli.StringFlag{
@@ -58,6 +62,7 @@ func main() {
 		Name:  "m3u8-download",
 		Usage: "make an explosive entrance",
 		Action: func(c *cli.Context) error {
+			PoolTest()
 			fmt.Println("!")
 			return nil
 		},
@@ -67,4 +72,37 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+}
+func PoolTest() {
+	b := mpb.New()
+	p := pool.New(4, 100)
+	var bars []*mpb.Bar
+
+	for i := 0; i < 100; i++ {
+		task := fmt.Sprintf("Thread #%02d:", i)
+		p.Submit(func() {
+
+			bar := b.AddBar(123*1024*1024,
+				mpb.PrependDecorators(
+					decor.Name(task, decor.WC{W: 25, C: decor.DidentRight}),
+					decor.Name("downloading", decor.WCSyncSpaceR),
+					decor.CountersKiloByte("%d / %d", decor.WCSyncWidth),
+				),
+				mpb.AppendDecorators(decor.Percentage(decor.WC{W: 5})),
+				mpb.BarRemoveOnComplete(),
+			)
+			bars = append(bars, bar)
+			for !bar.Completed() {
+				start := time.Now()
+				time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+				bar.IncrBy(9 * 1024 * 1024) // bytes
+
+				bar.DecoratorEwmaUpdate(time.Since(start))
+			}
+
+		})
+	}
+
+	p.Wait()
 }
